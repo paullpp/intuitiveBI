@@ -1,9 +1,22 @@
 services:
+  db: 
+    container_name: db
+    image: mysql:8.0
+    command: mysqld
+    volumes:
+      - "mysql:/var/lib/mysql"
+    env_file:
+      .env
+    ports:
+      - "3306:3306/tcp"
+  
   backend:
     build:
       context: ./src/backend
     ports:
       - "3000:3000"
+    depends_on:
+      - db
 
   frontend:
     build:
@@ -12,3 +25,6 @@ services:
       - "8000:80"
     depends_on:
       - backend
+
+volumes:
+  mysql:
