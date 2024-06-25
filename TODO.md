@@ -5,9 +5,9 @@
 ### BACKEND
 
 - [✅] Accept user input database credentials 
-- [ ] Store connections for a user
+- [✅] Store connections for a user
 - [✅] Set up connection to user provided db
-- [ ] Display users connections
+- [✅] Display users connections
 - [✅] Show tables in a users connection
 - [ ] Show all data from a table in a users connection
 

@@ -3,8 +3,10 @@ package main
 import (
 	"database/sql"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
+	"strconv"
 	"time"
 
 	_ "github.com/go-sql-driver/mysql"
@@ -16,8 +18,16 @@ import (
 )
 
 type QueryData = struct {
-	Results []string `json:"results"`
+	Results []string
 }
+
+type Connection = struct {
+	Name   string
+	Tables []string
+}
+
+var connections = make(map[int]Connection)
+var numConnections = 0
 
 func main() {
 	r := chi.NewRouter()
@@ -30,12 +40,39 @@ func main() {
 	r.Use(cors.Handler)
 	r.Use(middleware.Logger)
 
+	/*
+	 * Root Route, currently useless
+	 */
 	r.Get("/", func(w http.ResponseWriter, r *http.Request) {
-		fmt.Println("== Root")
+
 		render.Status(r, 200)
 	})
 
-	r.Post("/connect", func(w http.ResponseWriter, r *http.Request) {
+	/*
+	 * Returns all connections currently stored in the connections map
+	 */
+	r.Get("/connections", func(w http.ResponseWriter, r *http.Request) {
+
+		render.JSON(w, r, connections)
+	})
+
+	/*
+	 * Returns all tables for a given connection
+	 */
+	r.Get("/connections/{conn}/tables", func(w http.ResponseWriter, r *http.Request) {
+		conn, err := strconv.Atoi(chi.URLParam(r, "conn"))
+		if err != nil {
+			fmt.Println("== Error in /connections/:conn/tables str conversion:", err)
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+		}
+
+		render.JSON(w, r, connections[conn].Tables)
+	})
+
+	/*
+	 * Adds a new connection. Stores it in the connections map
+	 */
+	r.Post("/connections", func(w http.ResponseWriter, r *http.Request) {
 		var body string
 
 		err := json.NewDecoder(r.Body).Decode(&body)
@@ -43,7 +80,16 @@ func main() {
 			http.Error(w, err.Error(), http.StatusBadRequest)
 			return
 		}
-		connectToDb(body)
+		// Add connection with name and empty arr for tables
+		table, err := connectToDb(body)
+		if err != nil {
+			fmt.Println("== Error in connectToDb:", err)
+			http.Error(w, err.Error(), http.StatusBadRequest)
+		}
+		tables := table.Results
+		connections[numConnections] = Connection{Name: body, Tables: tables}
+		numConnections++
+
 		render.Status(r, 201)
 	})
 
@@ -53,11 +99,14 @@ func main() {
 	}
 }
 
-func connectToDb(connStr string) {
+/*
+ * Connects to the DB using the provided connection string
+ * Returns an array of all tables in the DB
+ */
+func connectToDb(connStr string) (QueryData, error) {
 	db, err := sql.Open("mysql", connStr)
 	if err != nil {
-		fmt.Println("Error connecting to DB:", err)
-		return
+		return QueryData{}, errors.New("couldn't connect to DB")
 	}
 	db.SetConnMaxLifetime(time.Minute * 3)
 	db.SetMaxOpenConns(10)
@@ -65,8 +114,8 @@ func connectToDb(connStr string) {
 
 	rows, err := db.Query("SHOW TABLES")
 	if err != nil {
-		fmt.Println("Error fetching tables:", err)
-		return
+
+		return QueryData{}, errors.New("couldn't fetch tables")
 	}
 	defer rows.Close()
 
@@ -75,10 +124,11 @@ func connectToDb(connStr string) {
 		var row string
 		err := rows.Scan(&row)
 		if err != nil {
-			return
+			return QueryData{}, errors.New("error scanning rows")
 		}
 		data = append(data, row)
 	}
 	res := QueryData{Results: data}
-	fmt.Println(res)
+
+	return res, nil
 }
