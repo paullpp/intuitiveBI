@@ -15,13 +15,13 @@ export default function Connection(props: { connection: { Name: string, Tables: 
   const [ showTables, setShowTables ] = useState(false);
 
   return (
-    <>
-      <button className="btn rounded w-64" key={idx} onClick={() => setShowTables(prev => !prev)}> {idx+1}: {connection.Name.split("/")[1]} </button>
-      <div className="flex flex-wrap gap-5">
-        {showTables && connection.Tables.map((table) => (
-          <Table name={table} key={table}/>
-        ))}
-      </div>
-    </>
+    <li>
+      <button className="" key={idx} onClick={() => setShowTables(prev => !prev)}> {idx+1}: {connection.Name.split("/")[1]} </button>
+      <ul>
+        {showTables && (connection.Tables ? connection.Tables.map((table) => (
+          <Table name={table} idx={idx} key={table}/>
+        )) : <li>No tables available</li>)}
+      </ul>
+    </li>
   );
 }

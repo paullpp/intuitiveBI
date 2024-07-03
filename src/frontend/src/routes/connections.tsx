@@ -2,6 +2,7 @@ import { createFileRoute } from '@tanstack/react-router';
 import { useEffect, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import Connection from '../components/connection';
+import Preview from '../components/dataPreview';
 
 export const Route = createFileRoute('/connections')({
   component: Connections
@@ -25,14 +26,21 @@ function Connections() {
 
   return (
     <>
-      <div className='flex flex-col gap-10 m-5'>
-        <p className='font-bold text-2xl'>Connections</p>
-        {error && (
-          <p>{error.message}</p>
-        )}
-        {data && Object.keys(data).map((key) => (
-          <Connection connection={data[key]} idx={parseInt(key)} key={key}/>
-        ))}
+      <div className='flex flex-row gap-5 m-5'>
+        <div className='flex flex-col gap-10'>
+          <p className='font-bold text-2xl'>Connections</p>
+          {error && (
+            <p>{error.message}</p>
+          )}
+          <ul className="menu bg-base-200 rounded-box w-56">
+            {data && Object.keys(data).map((key) => (
+              <Connection connection={data[key]} idx={parseInt(key)} key={key}/>
+            ))}
+          </ul>
+        </div>
+        <div className='block'>
+          <Preview />
+        </div>
       </div>
       <div className='flex flex-col gap-10 m-5'>
         <p className='font-bold text-2xl'>Add a new connection</p>

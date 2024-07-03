@@ -173,7 +173,6 @@ func getDBData(connStr string) (QueryData, error) {
 
 	rows, err := db.Query("SHOW TABLES")
 	if err != nil {
-
 		return QueryData{}, errors.New("couldn't fetch tables")
 	}
 	defer rows.Close()
