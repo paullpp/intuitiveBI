@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"net/http"
 	"strconv"
+	"strings"
 	"time"
 
 	_ "github.com/go-sql-driver/mysql"
@@ -81,9 +82,9 @@ func main() {
 			return
 		}
 		// Add connection with name and empty arr for tables
-		table, err := connectToDb(body)
+		table, err := getDBData(body)
 		if err != nil {
-			fmt.Println("== Error in connectToDb:", err)
+			fmt.Println("== Error in getDBData:", err)
 			http.Error(w, err.Error(), http.StatusBadRequest)
 		}
 		tables := table.Results
@@ -91,6 +92,64 @@ func main() {
 		numConnections++
 
 		render.Status(r, 201)
+	})
+
+	r.Get("/connections/{conn}/tables/{table}/preview", func(w http.ResponseWriter, r *http.Request) {
+		idx, err := strconv.Atoi(chi.URLParam(r, "conn"))
+		if err != nil {
+			fmt.Println("== Error in /connections/:conn/tables str conversion:", err)
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+		}
+		conn := connections[idx]
+		schema := strings.Split(conn.Name, "/")
+		table := string(schema[len(schema)-1]) + "." + chi.URLParam(r, "table")
+
+		db, err := connectToDb(conn.Name)
+		if err != nil {
+			fmt.Println("== Unable to establish DB conn:", err)
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+		}
+		query := fmt.Sprintf("select * from %s limit 10;", table)
+		fmt.Println("=== Query: ", query)
+		rows, err := db.Query(query)
+		if err != nil {
+			fmt.Println("== Unable to establish DB conn:", err)
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+		}
+		defer rows.Close()
+
+		columns, err := rows.Columns()
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+		}
+
+		values := make([]interface{}, len(columns))
+		valuePtrs := make([]interface{}, len(columns))
+		for i := range columns {
+			valuePtrs[i] = &values[i]
+		}
+
+		result := []map[string]interface{}{}
+		for rows.Next() {
+			err := rows.Scan(valuePtrs...)
+			if err != nil {
+				http.Error(w, err.Error(), http.StatusInternalServerError)
+			}
+
+			rowData := make(map[string]interface{})
+			for i, col := range columns {
+				val := values[i]
+				rowData[col] = fmt.Sprintf("%s", val) // coerce to string
+			}
+
+			result = append(result, rowData)
+		}
+		if err = rows.Err(); err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+		}
+
+		fmt.Println("== Result: ", result)
+		render.JSON(w, r, result)
 	})
 
 	err := http.ListenAndServe(":3000", r)
@@ -103,7 +162,7 @@ func main() {
  * Connects to the DB using the provided connection string
  * Returns an array of all tables in the DB
  */
-func connectToDb(connStr string) (QueryData, error) {
+func getDBData(connStr string) (QueryData, error) {
 	db, err := sql.Open("mysql", connStr)
 	if err != nil {
 		return QueryData{}, errors.New("couldn't connect to DB")
@@ -131,4 +190,16 @@ func connectToDb(connStr string) (QueryData, error) {
 	res := QueryData{Results: data}
 
 	return res, nil
+}
+
+func connectToDb(connStr string) (*sql.DB, error) {
+	db, err := sql.Open("mysql", connStr)
+	if err != nil {
+		return nil, errors.New("couldn't connect to DB")
+	}
+	db.SetConnMaxLifetime(time.Minute * 3)
+	db.SetMaxOpenConns(10)
+	db.SetMaxIdleConns(10)
+
+	return db, nil
 }
